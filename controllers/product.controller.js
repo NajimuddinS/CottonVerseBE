@@ -105,7 +105,7 @@ exports.deleteProduct = async (req, res, next) => {
       await cloudinary.uploader.destroy(image.public_id);
     }
 
-    await product.remove();
+    await product.deleteOne();
 
     res.status(200).json({
       success: true,
@@ -133,11 +133,18 @@ exports.uploadProductImage = async (req, res, next) => {
       return next(new ErrorResponse(`Please upload an image file`, 400));
     }
 
+    // Delete old images if they exist
+    if (product.images && product.images.length > 0) {
+      for (const image of product.images) {
+        await cloudinary.uploader.destroy(image.public_id);
+      }
+    }
+
     // Add new image to product
-    product.images.push({
-      public_id: req.file.public_id,
+    product.images = [{
+      public_id: req.file.filename,
       url: req.file.path
-    });
+    }];
 
     await product.save();
 
@@ -149,4 +156,3 @@ exports.uploadProductImage = async (req, res, next) => {
     next(error);
   }
 };
-
