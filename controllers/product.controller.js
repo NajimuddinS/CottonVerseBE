@@ -149,3 +149,4 @@ exports.uploadProductImage = async (req, res, next) => {
     next(error);
   }
 };
+
