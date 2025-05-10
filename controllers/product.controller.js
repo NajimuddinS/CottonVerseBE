@@ -147,12 +147,19 @@ exports.updateProduct = async (req, res, next) => {
       );
     }
 
-    // Handle image updates if needed
+    // Parse sizes if it's a string (same as in createProduct)
+    if (typeof req.body.sizes === 'string') {
+      req.body.sizes = JSON.parse(req.body.sizes);
+    }
+
+    // Handle image uploads if there are new images
     if (req.files && req.files.length > 0) {
-      // Delete old images
+      // Delete old images from cloudinary
       if (product.images?.length > 0) {
         for (const image of product.images) {
-          await cloudinary.uploader.destroy(image.public_id);
+          if (image.public_id) {
+            await cloudinary.uploader.destroy(image.public_id);
+          }
         }
       }
 
@@ -166,6 +173,7 @@ exports.updateProduct = async (req, res, next) => {
           default: imageType = 'front';
         }
         
+        // Upload to Cloudinary
         const result = await cloudinary.uploader.upload(file.path, {
           folder: 'ecommerce',
           public_id: `${Date.now()}-${file.originalname.split('.')[0]}`,
@@ -178,8 +186,12 @@ exports.updateProduct = async (req, res, next) => {
           type: imageType
         };
       }));
+    } else {
+      // No new images - exclude images field from the update
+      delete req.body.images;
     }
 
+    // Update the product
     product = await Product.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
       runValidators: true
@@ -190,6 +202,7 @@ exports.updateProduct = async (req, res, next) => {
       data: product
     });
   } catch (error) {
+    console.error("Error updating product:", error);
     next(error);
   }
 };

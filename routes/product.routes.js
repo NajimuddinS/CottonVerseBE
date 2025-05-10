@@ -74,12 +74,21 @@ router
     createProduct
   );
 
+//down here
 
 router
   .route('/:id')
   .get(getProduct)
-  .put(protect, authorize('admin'), updateProduct)
+  .put(
+    protect, 
+    authorize('admin'), 
+    upload.array('images', 3),  // Add this to handle file uploads
+    validateProduct,            // Add validation to update route
+    updateProduct
+  )
   .delete(protect, authorize('admin'), deleteProduct);
+
+// up there
 
 router
   .route('/:id/images')
