@@ -8,18 +8,25 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
+// In your upload.middleware.js, modify the storage configuration:
 const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
-  params: (req, file) => {
+  params: async (req, file) => {
     return {
       folder: 'ecommerce',
       allowed_formats: ['jpg', 'jpeg', 'png'],
       transformation: [{ width: 500, height: 500, crop: 'limit' }],
-      public_id: `${Date.now()}-${file.originalname.split('.')[0]}`
+      public_id: `${Date.now()}-${file.originalname.split('.')[0]}`,
+      resource_type: 'auto'
     };
   }
 });
 
-const upload = multer({ storage: storage });
+// Create the multer instance without .array() here
+const upload = multer({ 
+  storage: storage,
+  limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit per file
+});
+
 
 module.exports = upload;

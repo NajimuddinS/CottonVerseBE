@@ -41,20 +41,94 @@ exports.getProduct = async (req, res, next) => {
   }
 };
 
-// @desc    Create new product
-// @route   POST /api/v1/products
-// @access  Private/Admin
 exports.createProduct = async (req, res, next) => {
   try {
-    // Add user to req.body
     req.body.user = req.user.id;
 
-    const product = await Product.create(req.body);
+    // Parse sizes if it's a string
+    if (typeof req.body.sizes === 'string') {
+      req.body.sizes = JSON.parse(req.body.sizes);
+    }
 
-    res.status(201).json({
-      success: true,
-      data: product
-    });
+    // Handle images if uploaded
+    if (req.files && req.files.length > 0) {
+      req.body.images = await Promise.all(req.files.map(async (file, index) => {
+        let imageType;
+        switch(index) {
+          case 0: imageType = 'front'; break;
+          case 1: imageType = 'back'; break;
+          case 2: imageType = 'design'; break;
+          default: imageType = 'front';
+        }
+        
+        // Upload to Cloudinary
+        const result = await cloudinary.uploader.upload(file.path, {
+          folder: 'ecommerce',
+          public_id: `${Date.now()}-${file.originalname.split('.')[0]}`,
+          resource_type: 'auto'
+        });
+
+        return {
+          public_id: result.public_id,
+          url: result.secure_url,
+          type: imageType
+        };
+      }));
+    }
+
+    const product = await Product.create(req.body);
+    res.status(201).json({ success: true, data: product });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.uploadProductImages = async (req, res, next) => {
+  try {
+    const product = await Product.findById(req.params.id);
+
+    if (!product) {
+      return next(new ErrorResponse(`Product not found with id of ${req.params.id}`, 404));
+    }
+
+    if (!req.files || req.files.length === 0) {
+      return next(new ErrorResponse(`Please upload image files`, 400));
+    }
+
+    // Delete old images
+    if (product.images?.length > 0) {
+      for (const image of product.images) {
+        await cloudinary.uploader.destroy(image.public_id);
+      }
+    }
+
+    // Upload new images
+    const uploadedImages = await Promise.all(req.files.map(async (file, index) => {
+      let imageType;
+      switch(index) {
+        case 0: imageType = 'front'; break;
+        case 1: imageType = 'back'; break;
+        case 2: imageType = 'design'; break;
+        default: imageType = 'front';
+      }
+      
+      const result = await cloudinary.uploader.upload(file.path, {
+        folder: 'ecommerce',
+        public_id: `${Date.now()}-${file.originalname.split('.')[0]}`,
+        resource_type: 'auto'
+      });
+
+      return {
+        public_id: result.public_id,
+        url: result.secure_url,
+        type: imageType
+      };
+    }));
+
+    product.images = uploadedImages;
+    await product.save();
+    
+    res.status(200).json({ success: true, data: product });
   } catch (error) {
     next(error);
   }
@@ -71,6 +145,39 @@ exports.updateProduct = async (req, res, next) => {
       return next(
         new ErrorResponse(`Product not found with id of ${req.params.id}`, 404)
       );
+    }
+
+    // Handle image updates if needed
+    if (req.files && req.files.length > 0) {
+      // Delete old images
+      if (product.images?.length > 0) {
+        for (const image of product.images) {
+          await cloudinary.uploader.destroy(image.public_id);
+        }
+      }
+
+      // Upload new images
+      req.body.images = await Promise.all(req.files.map(async (file, index) => {
+        let imageType;
+        switch(index) {
+          case 0: imageType = 'front'; break;
+          case 1: imageType = 'back'; break;
+          case 2: imageType = 'design'; break;
+          default: imageType = 'front';
+        }
+        
+        const result = await cloudinary.uploader.upload(file.path, {
+          folder: 'ecommerce',
+          public_id: `${Date.now()}-${file.originalname.split('.')[0]}`,
+          resource_type: 'auto'
+        });
+
+        return {
+          public_id: result.public_id,
+          url: result.secure_url,
+          type: imageType
+        };
+      }));
     }
 
     product = await Product.findByIdAndUpdate(req.params.id, req.body, {
@@ -101,8 +208,10 @@ exports.deleteProduct = async (req, res, next) => {
     }
 
     // Delete images from cloudinary
-    for (const image of product.images) {
-      await cloudinary.uploader.destroy(image.public_id);
+    if (product.images?.length > 0) {
+      for (const image of product.images) {
+        await cloudinary.uploader.destroy(image.public_id);
+      }
     }
 
     await product.deleteOne();
@@ -110,47 +219,6 @@ exports.deleteProduct = async (req, res, next) => {
     res.status(200).json({
       success: true,
       data: {}
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// @desc    Upload image for product
-// @route   PUT /api/v1/products/:id/image
-// @access  Private/Admin
-exports.uploadProductImage = async (req, res, next) => {
-  try {
-    const product = await Product.findById(req.params.id);
-
-    if (!product) {
-      return next(
-        new ErrorResponse(`Product not found with id of ${req.params.id}`, 404)
-      );
-    }
-
-    if (!req.file) {
-      return next(new ErrorResponse(`Please upload an image file`, 400));
-    }
-
-    // Delete old images if they exist
-    if (product.images && product.images.length > 0) {
-      for (const image of product.images) {
-        await cloudinary.uploader.destroy(image.public_id);
-      }
-    }
-
-    // Add new image to product
-    product.images = [{
-      public_id: req.file.filename,
-      url: req.file.path
-    }];
-
-    await product.save();
-
-    res.status(200).json({
-      success: true,
-      data: product
     });
   } catch (error) {
     next(error);

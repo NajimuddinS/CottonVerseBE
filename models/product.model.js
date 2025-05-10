@@ -30,6 +30,12 @@ const productSchema = new mongoose.Schema({
       url: {
         type: String,
         required: true
+      },
+      type: {
+        type: String,
+        required: true,
+        enum: ['front', 'back', 'design'],
+        default: 'front'
       }
     }
   ],
